@@ -1,4 +1,4 @@
-package fim1
+package fim
 
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext

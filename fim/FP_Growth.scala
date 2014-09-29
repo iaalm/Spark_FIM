@@ -1,4 +1,4 @@
-package fim1
+package fim
 
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
@@ -6,7 +6,7 @@ import org.apache.spark.SparkContext.rddToPairRDDFunctions
 import scala.collection.mutable.Map
 import scala.tools.ant.sabbus.Break
 
-object fp {
+object FP_Growth {
   def key_index(a: Array[(String, Int)], s: String): Int = {
     val t = a.find(_._1 == s)
     t match {
@@ -16,7 +16,9 @@ object fp {
   }
   def main(args: Array[String]) = {
     val support_percent = 0.85
-    val pnum = 1;
+    val pnum = 2;
+//    val pnum = 16;
+//    val conf = new SparkConf()
     val conf = new SparkConf().setAppName("fim").setMaster("local")
     val sc = new SparkContext(conf)
     val file = sc.textFile(args(0))
@@ -34,15 +36,15 @@ object fp {
       .toList.map(key_index(g_list, _))
       .sortWith(_ < _), 1))
     val item = items.reduceByKey(_ + _)
-    val support_num: Int = items.count() * support_percent toInt
+    val support_num: Int = item.reduce((t1,t2) => (List[Int](),t1._2 + t2._2))._2 * support_percent toInt
 
     val f_list = item.flatMap(t => {
       var pre = -1
       var i = t._1.length - 1
       var result = List[(Int, (List[Int], Int))]()
       while (i >= 0) {
-        if (t._1(i) / g_size != pre) {
-          pre = t._1(i) / g_size
+        if ((t._1(i) - 1) / g_size != pre) {
+          pre = (t._1(i) - 1) / g_size
           result = (pre, (t._1.dropRight(t._1.length - i - 1), t._2)) :: result
         }
         i -= 1
@@ -101,6 +103,14 @@ object fp {
         }
       }
     }
+    //deal with target
+    var r = List[(List[Int], Int)]()
+    var tail: Iterable[Int] = null
+    if (target == null)
+      tail = tab.keys
+    else {
+      tail = target.filter(a => tab.exists(b => b._1 == a))
+    }
     //single
     var cur = root
     var c = 1
@@ -114,22 +124,11 @@ object fp {
           cur = cur.son.head._2
           res = (cur.Gv,cur.support) :: res
         }
-        val a = gen(res)
-        print(a)
-        print("fsda")
         return gen(res)
-        //TODO:
       }
       cur = cur.son.values.head
     }
     //process
-    var r = List[(List[Int], Int)]()
-    var tail: Iterable[Int] = null
-    if (target == null)
-      tail = tab.keys
-    else {
-      tail = target.filter(a => tab.exists(b => b._1 == a))
-    }
     for (i <- tail) {
       var result = List[(List[Int], Int)]()
       var cur = tab(i)
