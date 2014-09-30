@@ -16,9 +16,9 @@ object FP_Growth {
   }
   def main(args: Array[String]) = {
     val support_percent = 0.85
+    //    val pnum = 16;
+    //    val conf = new SparkConf()
     val pnum = 2;
-//    val pnum = 16;
-//    val conf = new SparkConf()
     val conf = new SparkConf().setAppName("fim").setMaster("local")
     val sc = new SparkContext(conf)
     val file = sc.textFile(args(0))
@@ -36,7 +36,7 @@ object FP_Growth {
       .toList.map(key_index(g_list, _))
       .sortWith(_ < _), 1))
     val item = items.reduceByKey(_ + _)
-    val support_num: Int = item.reduce((t1,t2) => (List[Int](),t1._2 + t2._2))._2 * support_percent toInt
+    val support_num: Int = items.count() * support_percent toInt
 
     val f_list = item.flatMap(t => {
       var pre = -1
@@ -59,11 +59,12 @@ object FP_Growth {
     sc.stop()
   }
   def fp_growth(v: Iterable[(List[Int], Int)], min_support: Int, target: Iterable[Int] = null): List[(List[Int], Int)] = {
-    if(v.count(t => true) == 1){
+    if (v.count(t => true) == 1) {
       return List(v.head)
     }
     val root = new tree(null, null, 0)
     val tab = Map[Int, tree]()
+    val tabc = Map[Int, Int]()
     //mk tree
     for (i <- v) {
       var cur = root;
@@ -94,6 +95,7 @@ object FP_Growth {
         count += cur.support
         cur = cur.Gnext
       }
+      tabc(i) = count
       if (count < min_support) {
         var cur = tab(i)
         while (cur != null) {
@@ -101,6 +103,7 @@ object FP_Growth {
           cur.Gparent.son.remove(cur.Gv)
           cur = s
         }
+        tab.remove(i)
       }
     }
     //deal with target
@@ -111,20 +114,27 @@ object FP_Growth {
     else {
       tail = target.filter(a => tab.exists(b => b._1 == a))
     }
+    if (tail.count(t => true) == 0)
+      return r
     //single
     var cur = root
     var c = 1
     while (c < 2) {
       c = cur.son.count(t => true)
       if (c == 0) {
-        val pcur = cur
-        var res = List[(Int,Int)]((0,root.support))
-        cur = root
-        while (cur != pcur) {
-          cur = cur.son.head._2
-          res = (cur.Gv,cur.support) :: res
+        var res = List[(Int, Int)]()
+        while (cur != root) {
+          res = (cur.Gv, cur.support) :: res
+          cur = cur.Gparent
         }
-        return gen(res)
+
+        val part = res.partition(t1 => tail.exists(t2 => t1._1 == t2))
+        val p1 = gen(part._1)
+
+        if (part._2.length == 0)
+          return p1
+        else
+          return decare(p1, gen(part._2)) ::: p1
       }
       cur = cur.son.values.head
     }
@@ -135,25 +145,33 @@ object FP_Growth {
       while (cur != null) {
         var item = List[Int]()
         var s = cur.Gparent
-        while (s.Gparent != null) {
+        while (s != root) {
           item = s.Gv :: item
           s = s.Gparent
         }
         result = (item, cur.support) :: result
         cur = cur.Gnext
       }
-      r = fp_growth(result, min_support).map(t => (i :: t._1, t._2)) ::: r
+      r = (List(i), tabc(i)) :: fp_growth(result, min_support).map(t => (i :: t._1, t._2)) ::: r
 
     }
     r
   }
-  def gen(tab : List[(Int,Int)]): List[(List[Int], Int)]= {
-    if(tab.length == 1){
-       return List((List(),tab(0)._2))
+  def gen(tab: List[(Int, Int)]): List[(List[Int], Int)] = {
+    if (tab.length == 1) {
+      return List((List(tab(0)._1), tab(0)._2))
     }
     val sp = tab(0)
     val t = gen(tab.drop(1))
-    return t.map(s => (sp._1::s._1,sp._2)):::t
+    return (List(sp._1), sp._2) :: t.map(s => (sp._1 :: s._1, s._2 min sp._2)) ::: t
+    //TODO: sp._2 may not be min
+  }
+  def decare[T](a: List[(List[T], Int)], b: List[(List[T], Int)]): List[(List[T], Int)] = {
+    var res = List[(List[T], Int)]()
+    for (i <- a)
+      for (j <- b)
+        res = (i._1 ::: j._1, i._2 min j._2) :: res
+    res
   }
 }
 
