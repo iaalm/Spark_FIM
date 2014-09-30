@@ -59,9 +59,6 @@ object FP_Growth {
     sc.stop()
   }
   def fp_growth(v: Iterable[(List[Int], Int)], min_support: Int, target: Iterable[Int] = null): List[(List[Int], Int)] = {
-    if (v.count(t => true) == 1) {
-      return List(v.head)
-    }
     val root = new tree(null, null, 0)
     val tab = Map[Int, tree]()
     val tabc = Map[Int, Int]()
@@ -130,7 +127,6 @@ object FP_Growth {
 
         val part = res.partition(t1 => tail.exists(t2 => t1._1 == t2))
         val p1 = gen(part._1)
-
         if (part._2.length == 0)
           return p1
         else
