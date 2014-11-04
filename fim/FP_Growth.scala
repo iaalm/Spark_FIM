@@ -16,27 +16,34 @@ object FP_Growth {
   }
   def main(args: Array[String]) = {
     val support_percent = 0.85
-    //    val pnum = 16;
-    //    val conf = new SparkConf()
-    val pnum = 2;
-    val conf = new SparkConf().setAppName("fim").setMaster("local")
+    val pnum = 32;
+    val conf = new SparkConf()
+//    val pnum = 2;
+//    val conf = new SparkConf().setAppName("fim").setMaster("local")
     val sc = new SparkContext(conf)
     val file = sc.textFile(args(0))
-    val g_list = file.flatMap(line => line.split(" ").drop(1))
+    val g = file.flatMap(line => line.split(" ").drop(1))
       .map(word => (word, 1))
       .reduceByKey(_ + _)
       .sortBy(_._2, false)
+      .cache()
+    val g_list = g
       .collect
       .toArray
-    val g_count = g_list.length
+    var g_count = 0
+    val g_map = Map[String,Int]()
+    for(i <- g_list){
+      g_count = g_count + 1
+      g_map(i._1) = g_count
+    }
     val g_size = (g_count + pnum - 1) / pnum
     val items = file.map(line => (
       line.split(" ")
       .drop(1)
-      .toList.map(key_index(g_list, _))
+      .toList.map(g_map(_))
       .sortWith(_ < _), 1))
     val item = items.reduceByKey(_ + _)
-    val support_num: Int = items.count() * support_percent toInt
+    val support_num: Int = item.map(t =>(1,t._2)).reduceByKey(_+_).first()._2 * support_percent toInt
 
     val f_list = item.flatMap(t => {
       var pre = -1
@@ -52,10 +59,12 @@ object FP_Growth {
       result
     })
       .groupByKey()
+      .cache()
     val d_result = f_list.flatMap(t => {
       fp_growth(t._2, support_num, t._1 * g_size + 1 to (((t._1 + 1) * g_size) min g_count))
     })
-    d_result.saveAsTextFile(args(1))
+    d_result.map(t => (t._1.map(a => g_list(a - 1)._1),t._2)).saveAsTextFile(args(1))
+    //TODO: after
     sc.stop()
   }
   def fp_growth(v: Iterable[(List[Int], Int)], min_support: Int, target: Iterable[Int] = null): List[(List[Int], Int)] = {
