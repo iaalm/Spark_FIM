@@ -22,8 +22,19 @@ object FP_Growth {
 //    val conf = new SparkConf().setAppName("fim").setMaster("local")
     val sc = new SparkContext(conf)
     val file = sc.textFile(args(0))
-    val g = file.flatMap(line => line.split(" ").drop(1))
-      .map(word => (word, 1))
+    val f = file.map(line => (
+      line.split(" ")
+      .drop(1)
+      .toList
+      .sortWith(_ < _), 1))
+      .reduceByKey(_ + _)
+    val g = f.flatMap(line => {
+      var l = List[(String,Int)]()
+      for (i <- line._1){
+        l = (i,line._2)::l
+      }
+      l
+    })
       .reduceByKey(_ + _)
       .sortBy(_._2, false)
       .cache()
@@ -37,12 +48,12 @@ object FP_Growth {
       g_map(i._1) = g_count
     }
     val g_size = (g_count + pnum - 1) / pnum
-    val items = file.map(line => (
-      line.split(" ")
-      .drop(1)
-      .toList.map(g_map(_))
-      .sortWith(_ < _), 1))
-    val item = items.reduceByKey(_ + _)
+    val item = f.map(t => {
+    	var l = List[Int]()
+    	for (i <- t._1)
+    	  l = g_map(i)::l
+    	(l.sortWith(_<_),t._2)
+    })
     val support_num: Int = item.map(t =>(1,t._2)).reduceByKey(_+_).first()._2 * support_percent toInt
 
     val f_list = item.flatMap(t => {
@@ -65,6 +76,7 @@ object FP_Growth {
     })
     d_result.map(t => (t._1.map(a => g_list(a - 1)._1),t._2)).saveAsTextFile(args(1))
     //TODO: after
+    
     sc.stop()
   }
   def fp_growth(v: Iterable[(List[Int], Int)], min_support: Int, target: Iterable[Int] = null): List[(List[Int], Int)] = {
